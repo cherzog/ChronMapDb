@@ -247,7 +247,10 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         // Instanz aus dem Registry entfernen
         if (name != null) {
             instances.remove(name);
-            // Locks nicht entfernen - sie könnten wiederverwendet werden
+            // Hinweis: Locks werden bewusst nicht entfernt, da sie bei
+            // zukünftigen Instanzen mit dem gleichen Namen wiederverwendet werden.
+            // In Langzeit-Anwendungen mit sehr vielen verschiedenen Namen könnte
+            // dies zu einem moderaten Speicherverbrauch führen.
         }
         
         logger.info("ChronMapDb '{}' geschlossen", name);
@@ -359,9 +362,14 @@ public class ChronMapDb<K, V> implements AutoCloseable {
          * - Bei weiteren Aufrufen mit dem gleichen Namen wird die existierende Instanz zurückgegeben
          * - Thread-sicher: Parallele Aufrufe mit dem gleichen Namen warten aufeinander
          * 
+         * <p><strong>Wichtig:</strong> Wenn Sie einen Namen verwenden, stellen Sie sicher, dass alle
+         * Builder-Aufrufe mit diesem Namen die gleichen generischen Typen (K, V) verwenden.
+         * Andernfalls kann es zu ClassCastExceptions zur Laufzeit kommen.</p>
+         * 
          * @return Eine ChronMapDb-Instanz (neu oder existierend)
          * @throws IOException Bei I/O-Fehlern
          * @throws IllegalStateException Wenn erforderliche Parameter fehlen
+         * @throws ClassCastException Wenn ein Name mit inkompatiblen Typen wiederverwendet wird
          */
         @SuppressWarnings("unchecked")
         public ChronMapDb<K, V> build() throws IOException {

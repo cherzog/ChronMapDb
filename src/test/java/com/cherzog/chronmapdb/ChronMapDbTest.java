@@ -612,6 +612,57 @@ class ChronMapDbTest {
     }
     
     @Test
+    void testTypeMismatchWirftException() throws IOException {
+        ChronicleMap<String, String> stringMap = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-type-1")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        ChronicleMap<Integer, Integer> intMap = ChronicleMap
+            .of(Integer.class, Integer.class)
+            .name("test-map-type-2")
+            .entries(1000)
+            .create();
+        
+        File dbFile = tempDir.resolve("type-test.db").toFile();
+        
+        try {
+            // Erste Instanz mit String-Typen
+            ChronMapDb<String, String> db1 = new ChronMapDb.Builder<String, String>()
+                .name("type-test")
+                .chronicleMap(stringMap)
+                .mapDbFile(dbFile)
+                .keySerializer(Serializer.STRING)
+                .valueSerializer(Serializer.STRING)
+                .build();
+            
+            // Zweiter Versuch mit Integer-Typen sollte ClassCastException werfen
+            assertThrows(ClassCastException.class, () -> {
+                @SuppressWarnings("unused")
+                ChronMapDb<Integer, Integer> db2 = new ChronMapDb.Builder<Integer, Integer>()
+                    .name("type-test")  // Gleicher Name, andere Typen
+                    .chronicleMap(intMap)
+                    .mapDbFile(dbFile)
+                    .keySerializer(Serializer.INTEGER)
+                    .valueSerializer(Serializer.INTEGER)
+                    .build();
+            });
+            
+            db1.close();
+        } finally {
+            if (!stringMap.isClosed()) {
+                stringMap.close();
+            }
+            if (!intMap.isClosed()) {
+                intMap.close();
+            }
+        }
+    }
+    
+    @Test
     void testSingletonMitSnapshotWiederherstellung() throws IOException, InterruptedException {
         ChronicleMap<String, String> map1 = ChronicleMap
             .of(String.class, String.class)
