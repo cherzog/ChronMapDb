@@ -447,6 +447,22 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     }
     
     /**
+     * Löscht alle Singleton-Instanzen aus dem Registry (nur für Tests).
+     * <p>
+     * Diese Methode ist für Test-Bereinigung gedacht und sollte nicht in
+     * Produktionscode verwendet werden.
+     * </p>
+     */
+    public static void clearAllInstances() {
+        for (ChronMapDb<?, ?> instance : instances.values()) {
+            if (instance != null) {
+                instance.close();
+            }
+        }
+        instances.clear();
+    }
+    
+    /**
      * Builder-Klasse zum Erstellen von ChronMapDb-Instanzen.
      * 
      * @param <K> Der Typ der Map-Schlüssel
@@ -461,6 +477,13 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         private Serializer<K> keySerializer;
         private Serializer<V> valueSerializer;
         private KeyExtractor<K> defaultKeyExtractor;
+        
+        // Neue Felder für automatische ChronicleMap-Erstellung
+        private Class<K> keyClass;
+        private Class<V> valueClass;
+        private long entries = 10000;
+        private int averageKeySize = 20;
+        private int averageValueSize = 100;
         
         /**
          * Setzt den eindeutigen Namen der ChronMapDb-Instanz (optional).
@@ -477,7 +500,8 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         }
         
         /**
-         * Setzt die zu verwendende ChronicleMap (erforderlich).
+         * Setzt die zu verwendende ChronicleMap (optional).
+         * Wenn nicht gesetzt, wird automatisch eine ChronicleMap erstellt.
          * 
          * @param chronicleMap Die ChronicleMap-Instanz
          * @return Dieser Builder
@@ -488,7 +512,66 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         }
         
         /**
-         * Setzt die MapDB-Datei für Snapshots (erforderlich).
+         * Setzt die Typen für Schlüssel und Werte (erforderlich für automatische ChronicleMap-Erstellung).
+         * 
+         * @param keyClass Die Klasse der Schlüssel
+         * @param valueClass Die Klasse der Werte
+         * @return Dieser Builder
+         */
+        public Builder<K, V> types(Class<K> keyClass, Class<V> valueClass) {
+            this.keyClass = keyClass;
+            this.valueClass = valueClass;
+            return this;
+        }
+        
+        /**
+         * Setzt die erwartete Anzahl von Einträgen (optional, Standard: 10000).
+         * Wird nur verwendet, wenn ChronicleMap automatisch erstellt wird.
+         * 
+         * @param entries Erwartete Anzahl von Einträgen
+         * @return Dieser Builder
+         */
+        public Builder<K, V> entries(long entries) {
+            if (entries <= 0) {
+                throw new IllegalArgumentException("Anzahl der Einträge muss größer als 0 sein");
+            }
+            this.entries = entries;
+            return this;
+        }
+        
+        /**
+         * Setzt die durchschnittliche Größe der Schlüssel in Bytes (optional, Standard: 20).
+         * Wird nur verwendet, wenn ChronicleMap automatisch erstellt wird.
+         * 
+         * @param size Durchschnittliche Schlüsselgröße in Bytes
+         * @return Dieser Builder
+         */
+        public Builder<K, V> averageKeySize(int size) {
+            if (size <= 0) {
+                throw new IllegalArgumentException("Durchschnittliche Schlüsselgröße muss größer als 0 sein");
+            }
+            this.averageKeySize = size;
+            return this;
+        }
+        
+        /**
+         * Setzt die durchschnittliche Größe der Werte in Bytes (optional, Standard: 100).
+         * Wird nur verwendet, wenn ChronicleMap automatisch erstellt wird.
+         * 
+         * @param size Durchschnittliche Wertgröße in Bytes
+         * @return Dieser Builder
+         */
+        public Builder<K, V> averageValueSize(int size) {
+            if (size <= 0) {
+                throw new IllegalArgumentException("Durchschnittliche Wertgröße muss größer als 0 sein");
+            }
+            this.averageValueSize = size;
+            return this;
+        }
+        
+        /**
+         * Setzt die MapDB-Datei für Snapshots (optional).
+         * Wenn nicht gesetzt, wird automatisch ein Dateiname aus dem Namen abgeleitet.
          * 
          * @param mapDbFile Die MapDB-Datei
          * @return Dieser Builder
@@ -588,12 +671,37 @@ public class ChronMapDb<K, V> implements AutoCloseable {
          */
         @SuppressWarnings("unchecked")
         public ChronMapDb<K, V> build() throws IOException {
+            // Automatische ChronicleMap-Erstellung, wenn nicht vorhanden
             if (chronicleMap == null) {
-                throw new IllegalStateException("ChronicleMap muss gesetzt werden");
+                if (keyClass == null || valueClass == null) {
+                    throw new IllegalStateException(
+                        "ChronicleMap muss gesetzt werden oder Schlüssel-/Werttypen müssen angegeben werden (types())"
+                    );
+                }
+                
+                String chronicleMapName = (name != null) ? name : "chronmap-" + System.currentTimeMillis();
+                chronicleMap = ChronicleMap
+                    .of(keyClass, valueClass)
+                    .name(chronicleMapName)
+                    .entries(entries)
+                    .averageKeySize(averageKeySize)
+                    .averageValueSize(averageValueSize)
+                    .create();
+                
+                logger.info("ChronicleMap '{}' automatisch erstellt mit {} Einträgen", chronicleMapName, entries);
             }
+            
+            // Automatische MapDB-Dateinamen-Ableitung, wenn nicht vorhanden
             if (mapDbFile == null) {
-                throw new IllegalStateException("MapDB-Datei muss gesetzt werden");
+                if (name == null) {
+                    throw new IllegalStateException(
+                        "MapDB-Datei muss gesetzt werden oder ein Name muss angegeben werden (name())"
+                    );
+                }
+                mapDbFile = new File(name + ".db");
+                logger.info("MapDB-Dateiname automatisch aus Name abgeleitet: {}", mapDbFile.getName());
             }
+            
             if (keySerializer == null) {
                 throw new IllegalStateException("Key-Serializer muss gesetzt werden");
             }
