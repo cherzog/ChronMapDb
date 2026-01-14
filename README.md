@@ -1,6 +1,6 @@
 # ChronMapDb
 
-Eine Java 17-Bibliothek, die ChronicleMap mit automatischen MapDB-Snapshots kombiniert.
+Eine Java 21-Bibliothek, die ChronicleMap mit automatischen MapDB-Snapshots kombiniert.
 
 ## Überblick
 
@@ -14,11 +14,11 @@ ChronMapDb bietet eine leistungsstarke In-Memory-Map (ChronicleMap) mit automati
 - **Builder-Pattern** für einfache Konfiguration
 - **Automatisches Laden** bestehender Daten beim Start
 - **Thread-sicher** und produktionsreif
-- **Java 17** mit modernen Java-Features
+- **Java 21** mit modernen Java-Features
 
 ## Voraussetzungen
 
-- Java 17 oder höher
+- Java 21 oder höher
 - Maven 3.6 oder höher
 
 ## Installation
