@@ -343,6 +343,38 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         return containsKeyWithExtractor(keySource, defaultKeyExtractor);
     }
     
+    /**
+     * Fügt ein ResultSet in die Map ein, wobei der Schlüssel mit dem Standard-KeyExtractor
+     * extrahiert wird und das ResultSet selbst als Wert gespeichert wird.
+     * 
+     * <p>Diese Convenience-Methode kombiniert Schlüsselextraktion und Wertspeicherung:
+     * <pre>
+     * // Beispiel mit KeyExtractor.fromResultSetByName("ID")
+     * db.putResultSet(resultSet);
+     * // Äquivalent zu:
+     * // K key = defaultKeyExtractor.extractKey(resultSet);
+     * // db.put(key, (V) resultSet);
+     * </pre>
+     * 
+     * <p><strong>Hinweis:</strong> Der Werttyp V muss mit java.sql.ResultSet kompatibel sein.
+     * Alternativ sollte ein ValueConverter verwendet werden, um das ResultSet in einen
+     * geeigneten Typ zu konvertieren, bevor es gespeichert wird.
+     * 
+     * @param resultSet Das ResultSet, aus dem der Schlüssel extrahiert wird und das als Wert gespeichert wird
+     * @return Der vorherige Wert oder null
+     * @throws IllegalStateException wenn kein defaultKeyExtractor konfiguriert wurde
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     * @throws ClassCastException wenn V nicht mit ResultSet kompatibel ist
+     */
+    @SuppressWarnings("unchecked")
+    public V putResultSet(java.sql.ResultSet resultSet) {
+        if (defaultKeyExtractor == null) {
+            throw new IllegalStateException("Kein defaultKeyExtractor konfiguriert. Verwenden Sie Builder.defaultKeyExtractor().");
+        }
+        K key = defaultKeyExtractor.extractKey(resultSet);
+        return put(key, (V) resultSet);
+    }
+    
     @Override
     public void close() {
         logger.info("Schließe ChronMapDb '{}'...", name);

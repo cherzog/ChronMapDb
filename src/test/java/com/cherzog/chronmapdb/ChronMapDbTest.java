@@ -931,4 +931,76 @@ class ChronMapDbTest {
             assertEquals(1000, db.size());
         }
     }
+    
+    @Test
+    void testPutResultSet() throws IOException, java.sql.SQLException {
+        KeyExtractor<String> extractor = KeyExtractor.fromResultSetByName("ID");
+        
+        // For this test, we use String as the value type and test that we can
+        // extract the key from ResultSet and store it with a value
+        ChronicleMap<String, String> stringMap = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-resultset")
+            .entries(100)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        File rsDbFile = tempDir.resolve("test-resultset.db").toFile();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(stringMap)
+            .mapDbFile(rsDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            // Mock ResultSet
+            java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+            org.mockito.Mockito.when(rs.getObject("ID")).thenReturn("123");
+            
+            // Test putResultSet - Note: In real use, value type V must be compatible with ResultSet
+            // For this test, we expect ClassCastException since String is not compatible with ResultSet
+            assertThrows(ClassCastException.class, () -> db.putResultSet(rs));
+            
+            db.close();
+        } finally {
+            if (!stringMap.isClosed()) {
+                stringMap.close();
+            }
+        }
+    }
+    
+    @Test
+    void testPutResultSetWithoutDefaultExtractorThrowsException() throws IOException {
+        ChronicleMap<String, Object> objectMap = ChronicleMap
+            .of(String.class, Object.class)
+            .name("test-map-resultset-no-extractor")
+            .entries(100)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        File rsDbFile = tempDir.resolve("test-resultset-no-extractor.db").toFile();
+        
+        try (ChronMapDb<String, Object> db = new ChronMapDb.Builder<String, Object>()
+            .chronicleMap(objectMap)
+            .mapDbFile(rsDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.JAVA)
+            // No defaultKeyExtractor configured
+            .build()) {
+            
+            java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+            
+            assertThrows(IllegalStateException.class, () -> db.putResultSet(rs));
+            
+            db.close();
+        } finally {
+            if (!objectMap.isClosed()) {
+                objectMap.close();
+            }
+        }
+    }
 }
