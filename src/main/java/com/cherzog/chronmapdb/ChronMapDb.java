@@ -247,7 +247,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         // Instanz aus dem Registry entfernen
         if (name != null) {
             instances.remove(name);
-            locks.remove(name);
+            // Locks nicht entfernen - sie könnten wiederverwendet werden
         }
         
         logger.info("ChronMapDb '{}' geschlossen", name);
@@ -277,7 +277,8 @@ public class ChronMapDb<K, V> implements AutoCloseable {
          * @return Dieser Builder
          */
         public Builder<K, V> name(String name) {
-            this.name = name;
+            // Normalisiere leere/null Namen zu null
+            this.name = (name == null || name.trim().isEmpty()) ? null : name.trim();
             return this;
         }
         
@@ -378,7 +379,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
             }
             
             // Wenn kein Name gesetzt ist, erstelle eine neue Instanz ohne Singleton-Verhalten
-            if (name == null || name.trim().isEmpty()) {
+            if (name == null) {
                 return new ChronMapDb<>(this);
             }
             

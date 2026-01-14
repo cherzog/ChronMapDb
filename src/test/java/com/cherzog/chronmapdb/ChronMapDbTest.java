@@ -350,6 +350,60 @@ class ChronMapDbTest {
     }
     
     @Test
+    void testLeerStringNameBehandeltWieOhneName() throws IOException {
+        ChronicleMap<String, String> map1 = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-empty-1")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        ChronicleMap<String, String> map2 = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-empty-2")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        File dbFile1 = tempDir.resolve("empty1.db").toFile();
+        File dbFile2 = tempDir.resolve("empty2.db").toFile();
+        
+        try {
+            ChronMapDb<String, String> db1 = new ChronMapDb.Builder<String, String>()
+                .name("")  // Leerer String
+                .chronicleMap(map1)
+                .mapDbFile(dbFile1)
+                .keySerializer(Serializer.STRING)
+                .valueSerializer(Serializer.STRING)
+                .build();
+            
+            ChronMapDb<String, String> db2 = new ChronMapDb.Builder<String, String>()
+                .name("   ")  // Nur Whitespace
+                .chronicleMap(map2)
+                .mapDbFile(dbFile2)
+                .keySerializer(Serializer.STRING)
+                .valueSerializer(Serializer.STRING)
+                .build();
+            
+            assertNotSame(db1, db2, "Leere Namen sollten verschiedene Instanzen erzeugen");
+            assertNull(db1.getName());
+            assertNull(db2.getName());
+            
+            db1.close();
+            db2.close();
+        } finally {
+            if (!map1.isClosed()) {
+                map1.close();
+            }
+            if (!map2.isClosed()) {
+                map2.close();
+            }
+        }
+    }
+    
+    @Test
     void testSingletonMitName() throws IOException {
         ChronicleMap<String, String> map1 = ChronicleMap
             .of(String.class, String.class)
