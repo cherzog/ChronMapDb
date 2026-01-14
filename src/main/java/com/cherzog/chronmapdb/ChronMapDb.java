@@ -453,7 +453,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      * Produktionscode verwendet werden.
      * </p>
      */
-    public static void clearAllInstances() {
+    static void clearAllInstances() {
         for (ChronMapDb<?, ?> instance : instances.values()) {
             if (instance != null) {
                 instance.close();

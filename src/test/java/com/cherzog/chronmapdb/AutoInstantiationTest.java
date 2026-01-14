@@ -1,7 +1,6 @@
 package com.cherzog.chronmapdb;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mapdb.Serializer;
@@ -99,7 +98,7 @@ class AutoInstantiationTest {
             assertEquals("value1", db.get("key1"));
             
             // Prüfe, ob die Datei erstellt wurde
-            assertTrue(expectedFile.exists() || expectedFile.getParentFile() != null);
+            assertTrue(expectedFile.exists());
         } finally {
             db.close();
             // Cleanup
