@@ -727,4 +727,202 @@ class ChronMapDbTest {
             }
         }
     }
+    
+    @Test
+    void testPutWithArrayKeyExtractor() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            KeyExtractor<String> extractor = KeyExtractor.fromArray();
+            String[] keyArray = {"user", "123", "profile"};
+            
+            db.putWithExtractor(keyArray, "userData", extractor);
+            
+            // Sollte mit dem zusammengesetzten Schlüssel abrufbar sein
+            assertEquals("userData", db.get("user\0123\0profile"));
+        }
+    }
+    
+    @Test
+    void testGetWithArrayKeyExtractor() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Daten mit normalem Schlüssel einfügen
+            db.put("user\0123\0profile", "userData");
+            
+            // Mit Array-Extraktor abrufen
+            KeyExtractor<String> extractor = KeyExtractor.fromArray();
+            String[] keyArray = {"user", "123", "profile"};
+            
+            assertEquals("userData", db.getWithExtractor(keyArray, extractor));
+        }
+    }
+    
+    @Test
+    void testDefaultKeyExtractorPut() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            String[] keyArray = {"category", "books", "scifi"};
+            db.putExtracted(keyArray, "Science Fiction Books");
+            
+            assertEquals("Science Fiction Books", db.get("category\0books\0scifi"));
+        }
+    }
+    
+    @Test
+    void testDefaultKeyExtractorGet() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            db.put("product\0electronics\0laptop", "Laptop Data");
+            
+            String[] keyArray = {"product", "electronics", "laptop"};
+            assertEquals("Laptop Data", db.getExtracted(keyArray));
+        }
+    }
+    
+    @Test
+    void testDefaultKeyExtractorRemove() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            String[] keyArray = {"temp", "data"};
+            db.putExtracted(keyArray, "temporary");
+            
+            assertEquals("temporary", db.removeExtracted(keyArray));
+            assertNull(db.get("temp\0data"));
+        }
+    }
+    
+    @Test
+    void testDefaultKeyExtractorContainsKey() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            String[] keyArray = {"check", "exists"};
+            db.putExtracted(keyArray, "value");
+            
+            assertTrue(db.containsKeyExtracted(keyArray));
+            
+            String[] nonExistentKey = {"not", "there"};
+            assertFalse(db.containsKeyExtracted(nonExistentKey));
+        }
+    }
+    
+    @Test
+    void testPutExtractedWithoutDefaultExtractorThrowsException() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            String[] keyArray = {"test"};
+            assertThrows(IllegalStateException.class, () -> 
+                db.putExtracted(keyArray, "value"));
+        }
+    }
+    
+    @Test
+    void testGetExtractedWithoutDefaultExtractorThrowsException() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            String[] keyArray = {"test"};
+            assertThrows(IllegalStateException.class, () -> 
+                db.getExtracted(keyArray));
+        }
+    }
+    
+    @Test
+    void testSingleValueArrayKeyMatchesString() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Mit Array-Key speichern
+            String[] keyArray = {"ID"};
+            db.putWithExtractor(keyArray, "value1", extractor);
+            
+            // Mit String-Key abrufen (sollte funktionieren, da einzelnes Array-Element = String)
+            assertEquals("value1", db.get("ID"));
+        }
+    }
+    
+    @Test
+    void testPerformanceWithManyKeys() throws IOException {
+        KeyExtractor<String> extractor = KeyExtractor.fromArray();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .defaultKeyExtractor(extractor)
+            .build()) {
+            
+            long startTime = System.nanoTime();
+            
+            // 1000 Einträge einfügen
+            for (int i = 0; i < 1000; i++) {
+                String[] keyArray = {"key", String.valueOf(i)};
+                db.putExtracted(keyArray, "value" + i);
+            }
+            
+            long endTime = System.nanoTime();
+            long durationMs = (endTime - startTime) / 1_000_000;
+            
+            // Sollte weniger als 500ms für 1000 Operationen dauern
+            assertTrue(durationMs < 500, "Inserting 1000 records took " + durationMs + "ms");
+            assertEquals(1000, db.size());
+        }
+    }
 }

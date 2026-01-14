@@ -43,6 +43,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean hasChanges;
     private final long snapshotIntervalSeconds;
+    private final KeyExtractor<K> defaultKeyExtractor;
     
     /**
      * Privater Konstruktor - verwenden Sie den Builder zum Erstellen von Instanzen.
@@ -52,6 +53,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         this.chronicleMap = builder.chronicleMap;
         this.snapshotIntervalSeconds = builder.snapshotIntervalSeconds;
         this.hasChanges = new AtomicBoolean(false);
+        this.defaultKeyExtractor = builder.defaultKeyExtractor;
         
         // MapDB für Snapshots initialisieren
         this.mapDb = DBMaker
@@ -218,6 +220,129 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         return chronicleMap;
     }
     
+    /**
+     * Fügt ein Wert-Paar mit flexibler Schlüsselextraktion in die Map ein.
+     * Diese Methode ermöglicht es, Schlüssel aus verschiedenen Quellen zu extrahieren:
+     * - Strings, Timestamps, UUIDs direkt
+     * - Arrays von Werten (werden mit '\0' konkateniert)
+     * - java.sql.ResultSet Objekte (mit konfigurierten Spalten)
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @param value Der zu speichernde Wert
+     * @param keyExtractor Der KeyExtractor zur Umwandlung der Quelle in einen Schlüssel
+     * @return Der vorherige Wert oder null
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    @SuppressWarnings("unchecked")
+    public V putWithExtractor(Object keySource, V value, KeyExtractor<K> keyExtractor) {
+        K key = keyExtractor.extractKey(keySource);
+        return put(key, value);
+    }
+    
+    /**
+     * Gibt den Wert für einen mit KeyExtractor extrahierten Schlüssel zurück.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @param keyExtractor Der KeyExtractor zur Umwandlung der Quelle in einen Schlüssel
+     * @return Der Wert oder null
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public V getWithExtractor(Object keySource, KeyExtractor<K> keyExtractor) {
+        K key = keyExtractor.extractKey(keySource);
+        return get(key);
+    }
+    
+    /**
+     * Entfernt einen mit KeyExtractor extrahierten Schlüssel aus der Map.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @param keyExtractor Der KeyExtractor zur Umwandlung der Quelle in einen Schlüssel
+     * @return Der vorherige Wert oder null
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public V removeWithExtractor(Object keySource, KeyExtractor<K> keyExtractor) {
+        K key = keyExtractor.extractKey(keySource);
+        return remove(key);
+    }
+    
+    /**
+     * Prüft ob ein mit KeyExtractor extrahierter Schlüssel in der Map existiert.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @param keyExtractor Der KeyExtractor zur Umwandlung der Quelle in einen Schlüssel
+     * @return true wenn der Schlüssel existiert
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public boolean containsKeyWithExtractor(Object keySource, KeyExtractor<K> keyExtractor) {
+        K key = keyExtractor.extractKey(keySource);
+        return containsKey(key);
+    }
+    
+    /**
+     * Fügt ein Wert-Paar mit dem Standard-KeyExtractor in die Map ein.
+     * Diese Methode verwendet den im Builder konfigurierten defaultKeyExtractor.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @param value Der zu speichernde Wert
+     * @return Der vorherige Wert oder null
+     * @throws IllegalStateException wenn kein defaultKeyExtractor konfiguriert wurde
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public V putExtracted(Object keySource, V value) {
+        if (defaultKeyExtractor == null) {
+            throw new IllegalStateException("Kein defaultKeyExtractor konfiguriert. Verwenden Sie Builder.defaultKeyExtractor() oder putWithExtractor().");
+        }
+        return putWithExtractor(keySource, value, defaultKeyExtractor);
+    }
+    
+    /**
+     * Gibt den Wert für einen mit dem Standard-KeyExtractor extrahierten Schlüssel zurück.
+     * Diese Methode verwendet den im Builder konfigurierten defaultKeyExtractor.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @return Der Wert oder null
+     * @throws IllegalStateException wenn kein defaultKeyExtractor konfiguriert wurde
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public V getExtracted(Object keySource) {
+        if (defaultKeyExtractor == null) {
+            throw new IllegalStateException("Kein defaultKeyExtractor konfiguriert. Verwenden Sie Builder.defaultKeyExtractor() oder getWithExtractor().");
+        }
+        return getWithExtractor(keySource, defaultKeyExtractor);
+    }
+    
+    /**
+     * Entfernt einen mit dem Standard-KeyExtractor extrahierten Schlüssel aus der Map.
+     * Diese Methode verwendet den im Builder konfigurierten defaultKeyExtractor.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @return Der vorherige Wert oder null
+     * @throws IllegalStateException wenn kein defaultKeyExtractor konfiguriert wurde
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public V removeExtracted(Object keySource) {
+        if (defaultKeyExtractor == null) {
+            throw new IllegalStateException("Kein defaultKeyExtractor konfiguriert. Verwenden Sie Builder.defaultKeyExtractor() oder removeWithExtractor().");
+        }
+        return removeWithExtractor(keySource, defaultKeyExtractor);
+    }
+    
+    /**
+     * Prüft ob ein mit dem Standard-KeyExtractor extrahierter Schlüssel in der Map existiert.
+     * Diese Methode verwendet den im Builder konfigurierten defaultKeyExtractor.
+     * 
+     * @param keySource Die Quelle, aus der der Schlüssel extrahiert wird
+     * @return true wenn der Schlüssel existiert
+     * @throws IllegalStateException wenn kein defaultKeyExtractor konfiguriert wurde
+     * @throws IllegalArgumentException wenn die Schlüsselextraktion fehlschlägt
+     */
+    public boolean containsKeyExtracted(Object keySource) {
+        if (defaultKeyExtractor == null) {
+            throw new IllegalStateException("Kein defaultKeyExtractor konfiguriert. Verwenden Sie Builder.defaultKeyExtractor() oder containsKeyWithExtractor().");
+        }
+        return containsKeyWithExtractor(keySource, defaultKeyExtractor);
+    }
+    
     @Override
     public void close() {
         logger.info("Schließe ChronMapDb '{}'...", name);
@@ -270,6 +395,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         private long snapshotIntervalSeconds = 30; // Standard: 30 Sekunden
         private Serializer<K> keySerializer;
         private Serializer<V> valueSerializer;
+        private KeyExtractor<K> defaultKeyExtractor;
         
         /**
          * Setzt den eindeutigen Namen der ChronMapDb-Instanz (optional).
@@ -351,6 +477,30 @@ public class ChronMapDb<K, V> implements AutoCloseable {
          */
         public Builder<K, V> valueSerializer(Serializer<V> serializer) {
             this.valueSerializer = serializer;
+            return this;
+        }
+        
+        /**
+         * Setzt einen Standard-KeyExtractor für diese ChronMapDb-Instanz (optional).
+         * Wenn gesetzt, können vereinfachte put/get-Methoden verwendet werden.
+         * 
+         * Beispiele:
+         * <pre>
+         * // Für Array-Keys:
+         * builder.defaultKeyExtractor(KeyExtractor.fromArray())
+         * 
+         * // Für ResultSet mit Spaltenindex:
+         * builder.defaultKeyExtractor(KeyExtractor.fromResultSetByIndex(1))
+         * 
+         * // Für ResultSet mit Spaltennamen:
+         * builder.defaultKeyExtractor(KeyExtractor.fromResultSetByName("ID"))
+         * </pre>
+         * 
+         * @param keyExtractor Der Standard-KeyExtractor
+         * @return Dieser Builder
+         */
+        public Builder<K, V> defaultKeyExtractor(KeyExtractor<K> keyExtractor) {
+            this.defaultKeyExtractor = keyExtractor;
             return this;
         }
         
