@@ -76,7 +76,7 @@ class KeyExtractorTest {
         KeyExtractor<String> extractor = KeyExtractor.fromArray();
         
         Integer[] array = {1, 2, 3};
-        assertEquals("1\02\03", extractor.extractKey(array));
+        assertEquals("1\u00002\u00003", extractor.extractKey(array));
     }
     
     @Test
@@ -98,7 +98,7 @@ class KeyExtractorTest {
         Mockito.when(rs.getObject(2)).thenReturn(123);
         Mockito.when(rs.getObject(3)).thenReturn("value3");
         
-        assertEquals("value1\0123\0value3", extractor.extractKey(rs));
+        assertEquals("value1\u0000123\u0000value3", extractor.extractKey(rs));
     }
     
     @Test
@@ -166,7 +166,7 @@ class KeyExtractorTest {
         Mockito.when(rs.getObject("NAME")).thenReturn("John");
         Mockito.when(rs.getObject("VALUE")).thenReturn(45.67);
         
-        assertEquals("123\0John\045.67", extractor.extractKey(rs));
+        assertEquals("123\u0000John\u000045.67", extractor.extractKey(rs));
     }
     
     @Test

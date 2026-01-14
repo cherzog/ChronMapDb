@@ -743,7 +743,7 @@ class ChronMapDbTest {
             db.putWithExtractor(keyArray, "userData", extractor);
             
             // Sollte mit dem zusammengesetzten Schlüssel abrufbar sein
-            assertEquals("userData", db.get("user\0123\0profile"));
+            assertEquals("userData", db.get("user\u0000123\u0000profile"));
         }
     }
     
@@ -757,7 +757,7 @@ class ChronMapDbTest {
             .build()) {
             
             // Daten mit normalem Schlüssel einfügen
-            db.put("user\0123\0profile", "userData");
+            db.put("user\u0000123\u0000profile", "userData");
             
             // Mit Array-Extraktor abrufen
             KeyExtractor<String> extractor = KeyExtractor.fromArray();
@@ -782,7 +782,7 @@ class ChronMapDbTest {
             String[] keyArray = {"category", "books", "scifi"};
             db.putExtracted(keyArray, "Science Fiction Books");
             
-            assertEquals("Science Fiction Books", db.get("category\0books\0scifi"));
+            assertEquals("Science Fiction Books", db.get("category\u0000books\u0000scifi"));
         }
     }
     
@@ -798,7 +798,7 @@ class ChronMapDbTest {
             .defaultKeyExtractor(extractor)
             .build()) {
             
-            db.put("product\0electronics\0laptop", "Laptop Data");
+            db.put("product\u0000electronics\u0000laptop", "Laptop Data");
             
             String[] keyArray = {"product", "electronics", "laptop"};
             assertEquals("Laptop Data", db.getExtracted(keyArray));
@@ -821,7 +821,7 @@ class ChronMapDbTest {
             db.putExtracted(keyArray, "temporary");
             
             assertEquals("temporary", db.removeExtracted(keyArray));
-            assertNull(db.get("temp\0data"));
+            assertNull(db.get("temp\u0000data"));
         }
     }
     
