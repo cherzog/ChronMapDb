@@ -4,7 +4,7 @@ Eine Java 21-Bibliothek, die ChronicleMap mit automatischen MapDB-Snapshots komb
 
 ## Überblick
 
-ChronMapDb bietet eine leistungsstarke In-Memory-Map (ChronicleMap) mit automatischer Persistierung der Daten in eine MapDB-Datei. Nach jeder Änderung wird automatisch ein Snapshot erstellt (standardmäßig alle 30 Sekunden, konfigurierbar über den Builder).
+ChronMapDb bietet eine leistungsstarke In-Memory-Map (ChronicleMap) mit automatischer Persistierung der Daten in eine MapDB-Datei. Sobald Änderungen vorliegen, wird periodisch ein Snapshot erstellt (standardmäßig alle 30 Sekunden, konfigurierbar über den Builder). Das bedeutet: Werden innerhalb des Snapshot-Intervalls viele Datensätze geschrieben (z.B. 1.000.000 Einträge in 30 Sekunden), erfolgt nur ein Snapshot. Im Falle eines unerwarteten Neustarts können maximal die Änderungen des letzten Intervalls (Standard: 30 Sekunden) verloren gehen.
 
 ## Features
 
@@ -163,6 +163,7 @@ assert db1 == db2;
 - `containsKey(K key)` - Prüft ob ein Schlüssel existiert
 - `clear()` - Löscht alle Einträge
 - `snapshot()` - Erzwingt einen sofortigen Snapshot
+- `getLastWrittenKey()` - Gibt den zuletzt geschriebenen Schlüssel zurück (auch nach Restore verfügbar)
 - `getChronicleMap()` - Gibt die zugrunde liegende ChronicleMap zurück
 - `close()` - Schließt die Ressourcen (erstellt letzten Snapshot)
 
@@ -197,6 +198,13 @@ mvn package
 4. **Automatische Snapshots**: Ein Scheduler prüft im konfigurierten Intervall, ob Änderungen vorliegen
 5. **Snapshot-Erstellung**: Bei Änderungen werden alle Daten in die MapDB kopiert und committed
 6. **Sauberes Herunterfahren**: Beim Schließen wird ein letzter Snapshot erstellt
+
+### Persistierungs-Garantien
+
+- **Snapshot-Intervall**: Snapshots erfolgen periodisch (nicht nach jeder einzelnen Änderung), sobald Änderungen vorliegen
+- **Datenverlust-Fenster**: Bei einem unerwarteten Absturz können maximal die Änderungen seit dem letzten Snapshot verloren gehen (Standard: max. 30 Sekunden)
+- **Performance vs. Sicherheit**: Ein kürzeres Intervall erhöht die Datensicherheit, verringert aber die Performance
+- **Kontrollierter Shutdown**: Beim normalen Schließen (z.B. via `close()`) wird immer ein finaler Snapshot erstellt
 
 ## Vorteile
 

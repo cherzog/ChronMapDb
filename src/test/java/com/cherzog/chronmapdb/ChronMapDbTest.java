@@ -350,6 +350,75 @@ class ChronMapDbTest {
     }
     
     @Test
+    void testGetLastWrittenKey() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Zu Beginn sollte kein letzter Schlüssel vorhanden sein
+            assertNull(db.getLastWrittenKey());
+            
+            // Schlüssel schreiben
+            db.put("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Weiteren Schlüssel schreiben
+            db.put("key2", "value2");
+            assertEquals("key2", db.getLastWrittenKey());
+            
+            // Noch einen Schlüssel schreiben
+            db.put("key3", "value3");
+            assertEquals("key3", db.getLastWrittenKey());
+        }
+    }
+    
+    @Test
+    void testGetLastWrittenKeyNachRestore() throws IOException, InterruptedException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .snapshotIntervalSeconds(1) // Kurzes Intervall für Tests
+            .build()) {
+            
+            db.put("key1", "value1");
+            db.put("key2", "value2");
+            db.put("key3", "value3");
+            
+            // Auf automatischen Snapshot warten
+            TimeUnit.SECONDS.sleep(2);
+        }
+        
+        // Neue Instanz erstellen um letzten Schlüssel aus MapDB zu laden
+        ChronicleMap<String, String> neueChronicleMap = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-lastkey")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        try (ChronMapDb<String, String> db2 = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(neueChronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Letzter Schlüssel sollte aus MapDB geladen worden sein
+            assertEquals("key3", db2.getLastWrittenKey());
+        } finally {
+            if (!neueChronicleMap.isClosed()) {
+                neueChronicleMap.close();
+            }
+        }
+    }
+    
+    @Test
     void testLeerStringNameBehandeltWieOhneName() throws IOException {
         ChronicleMap<String, String> map1 = ChronicleMap
             .of(String.class, String.class)
