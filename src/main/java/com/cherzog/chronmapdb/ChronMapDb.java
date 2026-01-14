@@ -31,6 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ChronMapDb<K, V> implements AutoCloseable {
     
     private static final Logger logger = LoggerFactory.getLogger(ChronMapDb.class);
+    private static final String LAST_KEY_MAP_NAME = "chronmap_lastkey";
     
     // Static registry for singleton instances by name
     private static final ConcurrentHashMap<String, ChronMapDb<?, ?>> instances = new ConcurrentHashMap<>();
@@ -40,10 +41,12 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     private final ChronicleMap<K, V> chronicleMap;
     private final DB mapDb;
     private final HTreeMap<K, V> mapDbMap;
+    private final HTreeMap<String, K> lastKeyMap;
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean hasChanges;
     private final long snapshotIntervalSeconds;
     private final KeyExtractor<K> defaultKeyExtractor;
+    private volatile K lastWrittenKey;
     
     /**
      * Privater Konstruktor - verwenden Sie den Builder zum Erstellen von Instanzen.
@@ -65,8 +68,19 @@ public class ChronMapDb<K, V> implements AutoCloseable {
             .hashMap(builder.mapName, builder.keySerializer, builder.valueSerializer)
             .createOrOpen();
         
+        // Separates HTreeMap für den letzten geschriebenen Schlüssel
+        this.lastKeyMap = mapDb
+            .hashMap(LAST_KEY_MAP_NAME, Serializer.STRING, builder.keySerializer)
+            .createOrOpen();
+        
         // Bestehende Daten aus MapDB in ChronicleMap laden
         ladeDatenAusMapDb();
+        
+        // Letzten Schlüssel aus MapDB laden
+        this.lastWrittenKey = lastKeyMap.get("last");
+        if (lastWrittenKey != null) {
+            logger.info("Letzter geschriebener Schlüssel geladen: {}", lastWrittenKey);
+        }
         
         // Scheduler für automatische Snapshots starten
         this.scheduler = Executors.newScheduledThreadPool(1);
@@ -115,6 +129,11 @@ public class ChronMapDb<K, V> implements AutoCloseable {
             mapDbMap.put(entry.getKey(), entry.getValue());
         }
         
+        // Letzten geschriebenen Schlüssel speichern
+        if (lastWrittenKey != null) {
+            lastKeyMap.put("last", lastWrittenKey);
+        }
+        
         // Änderungen in MapDB committen
         mapDb.commit();
         
@@ -130,6 +149,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      */
     public V put(K key, V value) {
         V result = chronicleMap.put(key, value);
+        this.lastWrittenKey = key;
         hasChanges.set(true);
         return result;
     }
@@ -218,6 +238,19 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      */
     public ChronicleMap<K, V> getChronicleMap() {
         return chronicleMap;
+    }
+    
+    /**
+     * Gibt den zuletzt geschriebenen Schlüssel zurück.
+     * 
+     * Diese Methode gibt den Schlüssel zurück, der zuletzt über put() oder eine der
+     * put*-Methoden geschrieben wurde. Der Schlüssel bleibt auch nach einem Neustart
+     * verfügbar, da er bei jedem Snapshot persistiert wird.
+     * 
+     * @return Der zuletzt geschriebene Schlüssel, oder null wenn noch kein Schlüssel geschrieben wurde
+     */
+    public K getLastWrittenKey() {
+        return lastWrittenKey;
     }
     
     /**
