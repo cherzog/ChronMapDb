@@ -10,6 +10,7 @@ ChronMapDb bietet eine leistungsstarke In-Memory-Map (ChronicleMap) mit automati
 
 - **Schnelle In-Memory-Operationen** mit ChronicleMap
 - **Automatische Persistierung** der Daten in MapDB
+- **Vereinfachte Verwendung** - ChronicleMap und MapDB werden automatisch erstellt
 - **Konfigurierbares Snapshot-Intervall** (Standard: 30 Sekunden)
 - **Builder-Pattern** für einfache Konfiguration
 - **Automatisches Laden** bestehender Daten beim Start
@@ -35,7 +36,57 @@ Fügen Sie folgende Dependency zu Ihrer `pom.xml` hinzu:
 
 ## Verwendung
 
-### Grundlegende Verwendung
+### Einfache Verwendung (neu ab Version 1.1.0)
+
+Die einfachste Möglichkeit, ChronMapDb zu verwenden, ist die automatische Instanzierung von ChronicleMap und MapDB:
+
+```java
+import com.cherzog.chronmapdb.ChronMapDb;
+import org.mapdb.Serializer;
+
+// Einfachste Verwendung - alles wird automatisch erstellt
+try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+        .name("meine-db")  // Name wird für MapDB-Dateiname verwendet (meine-db.db)
+        .types(String.class, String.class)  // Definiert Typen für ChronicleMap
+        .keySerializer(Serializer.STRING)
+        .valueSerializer(Serializer.STRING)
+        .build()) {
+    
+    // Daten hinzufügen
+    db.put("schluessel1", "wert1");
+    db.put("schluessel2", "wert2");
+    
+    // Daten abrufen
+    String wert = db.get("schluessel1");
+    
+    // Größe abfragen
+    long anzahl = db.size();
+}
+```
+
+### Erweiterte Konfiguration
+
+Sie können die automatisch erstellte ChronicleMap konfigurieren:
+
+```java
+try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+        .name("optimierte-db")
+        .types(String.class, String.class)
+        .entries(50000)  // Erwartete Anzahl von Einträgen
+        .averageKeySize(30)  // Durchschnittliche Schlüsselgröße in Bytes
+        .averageValueSize(200)  // Durchschnittliche Wertgröße in Bytes
+        .snapshotIntervalSeconds(60)  // Snapshot alle 60 Sekunden
+        .keySerializer(Serializer.STRING)
+        .valueSerializer(Serializer.STRING)
+        .build()) {
+    
+    // Ihre Code hier...
+}
+```
+
+### Manuelle Instanzierung (für fortgeschrittene Anwendungsfälle)
+
+Für spezielle Anforderungen können Sie ChronicleMap und MapDB weiterhin manuell erstellen:
 
 ```java
 import com.cherzog.chronmapdb.ChronMapDb;
@@ -52,7 +103,7 @@ ChronicleMap<String, String> chronicleMap = ChronicleMap
     .averageValueSize(100)
     .create();
 
-// ChronMapDb mit Standard-Einstellungen erstellen (30 Sekunden Snapshot-Intervall)
+// ChronMapDb mit manuell erstellter ChronicleMap
 try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
         .chronicleMap(chronicleMap)
         .mapDbFile(new File("daten.db"))
@@ -75,21 +126,6 @@ try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
     
     // Manueller Snapshot (optional)
     db.snapshot();
-}
-```
-
-### Konfiguration des Snapshot-Intervalls
-
-```java
-try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
-        .chronicleMap(chronicleMap)
-        .mapDbFile(new File("daten.db"))
-        .keySerializer(Serializer.STRING)
-        .valueSerializer(Serializer.STRING)
-        .snapshotIntervalSeconds(60)  // Snapshot alle 60 Sekunden
-        .build()) {
-    
-    // Ihre Code hier...
 }
 ```
 
@@ -169,9 +205,18 @@ assert db1 == db2;
 
 ### Builder-Optionen
 
-- `name(String)` - **Optional**: Eindeutiger Name für Singleton-Verhalten
-- `chronicleMap(ChronicleMap<K, V>)` - **Erforderlich**: Die zu verwendende ChronicleMap
-- `mapDbFile(File)` - **Erforderlich**: Die MapDB-Datei für Snapshots
+#### Automatische Instanzierung (empfohlen)
+- `name(String)` - **Erforderlich für Auto-Instanzierung**: Eindeutiger Name, wird auch für MapDB-Dateinamen verwendet
+- `types(Class<K>, Class<V>)` - **Erforderlich für Auto-Instanzierung**: Typen für ChronicleMap
+- `entries(long)` - Optional: Erwartete Anzahl von Einträgen (Standard: 10000)
+- `averageKeySize(int)` - Optional: Durchschnittliche Schlüsselgröße in Bytes (Standard: 20)
+- `averageValueSize(int)` - Optional: Durchschnittliche Wertgröße in Bytes (Standard: 100)
+
+#### Manuelle Instanzierung
+- `chronicleMap(ChronicleMap<K, V>)` - **Optional**: Manuell erstellte ChronicleMap
+- `mapDbFile(File)` - **Optional**: MapDB-Datei (wird aus name abgeleitet, wenn nicht angegeben)
+
+#### Gemeinsame Optionen
 - `keySerializer(Serializer<K>)` - **Erforderlich**: Serializer für Schlüssel
 - `valueSerializer(Serializer<V>)` - **Erforderlich**: Serializer für Werte
 - `snapshotIntervalSeconds(long)` - Optional: Snapshot-Intervall (Standard: 30)
