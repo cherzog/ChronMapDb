@@ -639,9 +639,12 @@ class ChronMapDbTest {
                 .valueSerializer(Serializer.STRING)
                 .build();
             
-            // Zweiter Versuch mit Integer-Typen sollte ClassCastException werfen
+            db1.put("testKey", "testValue");
+            
+            // Zweiter Versuch mit Integer-Typen - build() gibt die String-Instanz zurück
+            // Die ClassCastException tritt auf, wenn man versucht, die Instanz als Integer zu verwenden
             assertThrows(ClassCastException.class, () -> {
-                @SuppressWarnings("unused")
+                @SuppressWarnings("unchecked")
                 ChronMapDb<Integer, Integer> db2 = new ChronMapDb.Builder<Integer, Integer>()
                     .name("type-test")  // Gleicher Name, andere Typen
                     .chronicleMap(intMap)
@@ -649,6 +652,9 @@ class ChronMapDbTest {
                     .keySerializer(Serializer.INTEGER)
                     .valueSerializer(Serializer.INTEGER)
                     .build();
+                
+                // Der Cast funktioniert wegen Type Erasure, aber beim Zugriff gibt es eine ClassCastException
+                db2.put(123, 456);  // Dies sollte ClassCastException werfen
             });
             
             db1.close();
