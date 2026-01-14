@@ -262,7 +262,7 @@ class ChronMapDbTest {
     }
     
     @Test
-    void testManuellesnSnapshot() throws IOException {
+    void testManuellerSnapshot() throws IOException {
         try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
             .chronicleMap(chronicleMap)
             .mapDbFile(mapDbFile)
