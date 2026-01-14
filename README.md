@@ -116,10 +116,45 @@ try (ChronMapDb<Integer, String> db = new ChronMapDb.Builder<Integer, String>()
 }
 ```
 
+### Singleton-Muster mit eindeutigen Namen
+
+Die ChronMapDb unterstützt ein Singleton-Muster basierend auf Namen. Wenn Sie eine ChronMapDb-Instanz mit einem Namen erstellen, wird diese Instanz in der Anwendung eindeutig sein:
+
+```java
+// Erste Instanz mit Namen "meine-db"
+ChronMapDb<String, String> db1 = new ChronMapDb.Builder<String, String>()
+    .name("meine-db")  // Eindeutiger Name
+    .chronicleMap(chronicleMap)
+    .mapDbFile(new File("daten.db"))
+    .keySerializer(Serializer.STRING)
+    .valueSerializer(Serializer.STRING)
+    .build();
+
+// Zweiter Aufruf mit dem gleichen Namen gibt die gleiche Instanz zurück
+ChronMapDb<String, String> db2 = new ChronMapDb.Builder<String, String>()
+    .name("meine-db")  // Gleicher Name
+    .chronicleMap(chronicleMap)
+    .mapDbFile(new File("daten.db"))
+    .keySerializer(Serializer.STRING)
+    .valueSerializer(Serializer.STRING)
+    .build();
+
+// db1 und db2 sind die gleiche Instanz
+assert db1 == db2;
+```
+
+**Vorteile des Singleton-Musters:**
+- **Thread-sicher**: Parallele Builder-Aufrufe mit dem gleichen Namen sind sicher
+- **Ressourcen-Schonung**: Keine doppelten Instanzen für die gleiche Datenbank
+- **Automatische Snapshot-Wiederherstellung**: Beim ersten Erstellen werden bestehende Snapshots geladen
+
+**Hinweis:** Wenn Sie keinen Namen angeben, wird bei jedem `build()`-Aufruf eine neue Instanz erstellt.
+
 ## API-Dokumentation
 
 ### ChronMapDb-Methoden
 
+- `getName()` - Gibt den Namen dieser Instanz zurück (oder null)
 - `put(K key, V value)` - Fügt ein Schlüssel-Wert-Paar hinzu
 - `get(K key)` - Gibt den Wert für einen Schlüssel zurück
 - `remove(K key)` - Entfernt einen Schlüssel
@@ -133,6 +168,7 @@ try (ChronMapDb<Integer, String> db = new ChronMapDb.Builder<Integer, String>()
 
 ### Builder-Optionen
 
+- `name(String)` - **Optional**: Eindeutiger Name für Singleton-Verhalten
 - `chronicleMap(ChronicleMap<K, V>)` - **Erforderlich**: Die zu verwendende ChronicleMap
 - `mapDbFile(File)` - **Erforderlich**: Die MapDB-Datei für Snapshots
 - `keySerializer(Serializer<K>)` - **Erforderlich**: Serializer für Schlüssel

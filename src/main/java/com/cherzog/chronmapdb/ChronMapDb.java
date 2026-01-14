@@ -11,10 +11,12 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * ChronMapDb kombiniert ChronicleMap mit automatischen Snapshots in MapDB.
@@ -30,6 +32,11 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     
     private static final Logger logger = LoggerFactory.getLogger(ChronMapDb.class);
     
+    // Static registry for singleton instances by name
+    private static final ConcurrentHashMap<String, ChronMapDb<?, ?>> instances = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
+    
+    private final String name;
     private final ChronicleMap<K, V> chronicleMap;
     private final DB mapDb;
     private final HTreeMap<K, V> mapDbMap;
@@ -41,6 +48,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      * Privater Konstruktor - verwenden Sie den Builder zum Erstellen von Instanzen.
      */
     private ChronMapDb(Builder<K, V> builder) throws IOException {
+        this.name = builder.name;
         this.chronicleMap = builder.chronicleMap;
         this.snapshotIntervalSeconds = builder.snapshotIntervalSeconds;
         this.hasChanges = new AtomicBoolean(false);
@@ -62,7 +70,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         this.scheduler = Executors.newScheduledThreadPool(1);
         starteSnapshotScheduler();
         
-        logger.info("ChronMapDb initialisiert mit Snapshot-Intervall von {} Sekunden", snapshotIntervalSeconds);
+        logger.info("ChronMapDb '{}' initialisiert mit Snapshot-Intervall von {} Sekunden", name, snapshotIntervalSeconds);
     }
     
     /**
@@ -193,6 +201,15 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     }
     
     /**
+     * Gibt den Namen dieser ChronMapDb-Instanz zurück.
+     * 
+     * @return Der Name oder null wenn kein Name gesetzt wurde
+     */
+    public String getName() {
+        return name;
+    }
+    
+    /**
      * Gibt die zugrunde liegende ChronicleMap zurück.
      * 
      * @return Die ChronicleMap
@@ -203,7 +220,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     
     @Override
     public void close() {
-        logger.info("Schließe ChronMapDb...");
+        logger.info("Schließe ChronMapDb '{}'...", name);
         
         // Letzten Snapshot erstellen wenn Änderungen vorliegen
         if (hasChanges.get()) {
@@ -227,7 +244,16 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         // ChronicleMap schließen
         chronicleMap.close();
         
-        logger.info("ChronMapDb geschlossen");
+        // Instanz aus dem Registry entfernen
+        if (name != null) {
+            instances.remove(name);
+            // Hinweis: Locks werden bewusst nicht entfernt, da sie bei
+            // zukünftigen Instanzen mit dem gleichen Namen wiederverwendet werden.
+            // In Langzeit-Anwendungen mit sehr vielen verschiedenen Namen könnte
+            // dies zu einem moderaten Speicherverbrauch führen.
+        }
+        
+        logger.info("ChronMapDb '{}' geschlossen", name);
     }
     
     /**
@@ -237,12 +263,27 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      * @param <V> Der Typ der Map-Werte
      */
     public static class Builder<K, V> {
+        private String name;
         private ChronicleMap<K, V> chronicleMap;
         private File mapDbFile;
         private String mapName = "chronmap";
         private long snapshotIntervalSeconds = 30; // Standard: 30 Sekunden
         private Serializer<K> keySerializer;
         private Serializer<V> valueSerializer;
+        
+        /**
+         * Setzt den eindeutigen Namen der ChronMapDb-Instanz (optional).
+         * Wenn ein Name gesetzt wird, wird die Instanz als Singleton behandelt:
+         * Mehrere build()-Aufrufe mit dem gleichen Namen geben die gleiche Instanz zurück.
+         * 
+         * @param name Der eindeutige Name der Datenbank
+         * @return Dieser Builder
+         */
+        public Builder<K, V> name(String name) {
+            // Normalisiere leere/null Namen zu null
+            this.name = (name == null || name.trim().isEmpty()) ? null : name.trim();
+            return this;
+        }
         
         /**
          * Setzt die zu verwendende ChronicleMap (erforderlich).
@@ -316,10 +357,21 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         /**
          * Erstellt die ChronMapDb-Instanz.
          * 
-         * @return Eine neue ChronMapDb-Instanz
+         * Wenn ein Name gesetzt wurde, wird die Instanz als Singleton behandelt:
+         * - Beim ersten Aufruf wird eine neue Instanz erstellt und im Registry gespeichert
+         * - Bei weiteren Aufrufen mit dem gleichen Namen wird die existierende Instanz zurückgegeben
+         * - Thread-sicher: Parallele Aufrufe mit dem gleichen Namen warten aufeinander
+         * 
+         * <p><strong>Wichtig:</strong> Wenn Sie einen Namen verwenden, stellen Sie sicher, dass alle
+         * Builder-Aufrufe mit diesem Namen die gleichen generischen Typen (K, V) verwenden.
+         * Andernfalls kann es zu ClassCastExceptions zur Laufzeit kommen.</p>
+         * 
+         * @return Eine ChronMapDb-Instanz (neu oder existierend)
          * @throws IOException Bei I/O-Fehlern
          * @throws IllegalStateException Wenn erforderliche Parameter fehlen
+         * @throws ClassCastException Wenn ein Name mit inkompatiblen Typen wiederverwendet wird
          */
+        @SuppressWarnings("unchecked")
         public ChronMapDb<K, V> build() throws IOException {
             if (chronicleMap == null) {
                 throw new IllegalStateException("ChronicleMap muss gesetzt werden");
@@ -334,7 +386,36 @@ public class ChronMapDb<K, V> implements AutoCloseable {
                 throw new IllegalStateException("Value-Serializer muss gesetzt werden");
             }
             
-            return new ChronMapDb<>(this);
+            // Wenn kein Name gesetzt ist, erstelle eine neue Instanz ohne Singleton-Verhalten
+            if (name == null) {
+                return new ChronMapDb<>(this);
+            }
+            
+            // Hole oder erstelle ein Lock für diesen Namen
+            ReentrantLock lock = locks.computeIfAbsent(name, k -> new ReentrantLock());
+            
+            // Synchronisiere auf dem Lock für diesen Namen
+            lock.lock();
+            try {
+                // Prüfe ob bereits eine Instanz mit diesem Namen existiert
+                ChronMapDb<?, ?> existing = instances.get(name);
+                
+                if (existing != null) {
+                    logger.info("Gebe existierende ChronMapDb-Instanz '{}' zurück", name);
+                    return (ChronMapDb<K, V>) existing;
+                }
+                
+                // Erstelle neue Instanz
+                logger.info("Erstelle neue ChronMapDb-Instanz '{}'", name);
+                ChronMapDb<K, V> newInstance = new ChronMapDb<>(this);
+                
+                // Speichere im Registry
+                instances.put(name, newInstance);
+                
+                return newInstance;
+            } finally {
+                lock.unlock();
+            }
         }
     }
 }
