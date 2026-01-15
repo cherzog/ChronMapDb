@@ -36,7 +36,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
     private static final String LAST_KEY_MAP_NAME = "chronmap_lastkey";
     
     // Static registry for singleton instances by name
-    private static final ConcurrentHashMap<String, ChronMapDb<?, ?>> instances = new ConcurrentHashMap<>();
+    static final ConcurrentHashMap<String, ChronMapDb<?, ?>> instances = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
     
     private final String name;
@@ -681,6 +681,31 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         }
         
         /**
+         * Prüft, ob eine Klasse eine durchschnittliche Größe benötigt.
+         * Primitive Wrapper-Typen und Enums haben feste Größen in ChronicleMap.
+         * 
+         * @param clazz Die zu prüfende Klasse
+         * @return true wenn averageSize gesetzt werden sollte, false sonst
+         */
+        private static boolean needsAverageSize(Class<?> clazz) {
+            // Primitive Wrapper haben feste Größen
+            if (clazz == Integer.class || clazz == Long.class || 
+                clazz == Double.class || clazz == Float.class ||
+                clazz == Short.class || clazz == Byte.class ||
+                clazz == Character.class || clazz == Boolean.class) {
+                return false;
+            }
+            
+            // Enums haben auch feste Größen
+            if (clazz.isEnum()) {
+                return false;
+            }
+            
+            // Alle anderen Typen (String, benutzerdefinierte Klassen, etc.) benötigen averageSize
+            return true;
+        }
+        
+        /**
          * Erstellt die ChronMapDb-Instanz.
          * 
          * Wenn ein Name gesetzt wurde, wird die Instanz als Singleton behandelt:
@@ -708,13 +733,22 @@ public class ChronMapDb<K, V> implements AutoCloseable {
                 }
                 
                 String chronicleMapName = (name != null) ? name : "chronmap-" + System.currentTimeMillis();
-                chronicleMap = ChronicleMap
+                var builder = ChronicleMap
                     .of(keyClass, valueClass)
                     .name(chronicleMapName)
-                    .entries(entries)
-                    .averageKeySize(averageKeySize)
-                    .averageValueSize(averageValueSize)
-                    .create();
+                    .entries(entries);
+                
+                // Nur averageKeySize setzen, wenn der Key-Typ es benötigt (nicht für primitive Wrapper)
+                if (needsAverageSize(keyClass)) {
+                    builder.averageKeySize(averageKeySize);
+                }
+                
+                // Nur averageValueSize setzen, wenn der Value-Typ es benötigt
+                if (needsAverageSize(valueClass)) {
+                    builder.averageValueSize(averageValueSize);
+                }
+                
+                chronicleMap = builder.create();
                 
                 logger.info("ChronicleMap '{}' automatisch erstellt mit {} Einträgen", chronicleMapName, entries);
             }
