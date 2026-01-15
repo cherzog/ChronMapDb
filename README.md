@@ -11,9 +11,11 @@ ChronMapDb bietet eine leistungsstarke In-Memory-Map (ChronicleMap) mit automati
 - **Schnelle In-Memory-Operationen** mit ChronicleMap
 - **Automatische Persistierung** der Daten in MapDB
 - **Vereinfachte Verwendung** - ChronicleMap und MapDB werden automatisch erstellt
+- **MapDbHelper-Utility-Klasse** - Praktische Hilfsmethoden für häufige Anwendungsfälle
 - **Konfigurierbares Snapshot-Intervall** (Standard: 30 Sekunden)
 - **Builder-Pattern** für einfache Konfiguration
 - **Automatisches Laden** bestehender Daten beim Start
+- **Singleton-Unterstützung** - Benannte Instanzen werden wiederverwendet
 - **Thread-sicher** und produktionsreif
 - **Java 21** mit modernen Java-Features
 
@@ -36,9 +38,81 @@ Fügen Sie folgende Dependency zu Ihrer `pom.xml` hinzu:
 
 ## Verwendung
 
-### Einfache Verwendung (neu ab Version 1.1.0)
+### Einfachste Verwendung mit MapDbHelper (empfohlen)
 
-Die einfachste Möglichkeit, ChronMapDb zu verwenden, ist die automatische Instanzierung von ChronicleMap und MapDB:
+Die MapDbHelper-Klasse bietet praktische Utility-Methoden für häufige Anwendungsfälle:
+
+```java
+import com.cherzog.chronmapdb.MapDbHelper;
+
+// Einfache String-zu-String Datenbank mit Standardeinstellungen
+try (ChronMapDb<String, String> db = MapDbHelper.createSimpleStringDb("meine-db")) {
+    db.put("schluessel1", "wert1");
+    db.put("schluessel2", "wert2");
+    String wert = db.get("schluessel1");
+}
+
+// Typisierte Datenbank (z.B. Integer -> String)
+try (ChronMapDb<Integer, String> db = MapDbHelper.createSimpleDb(
+        "user-db",
+        Integer.class,
+        String.class,
+        Serializer.INTEGER,
+        Serializer.STRING)) {
+    
+    db.put(1, "Alice");
+    db.put(2, "Bob");
+}
+
+// Große Datenbank mit optimierten Einstellungen
+try (ChronMapDb<String, String> db = MapDbHelper.createLargeDb(
+        "big-data",
+        String.class,
+        String.class,
+        Serializer.STRING,
+        Serializer.STRING,
+        1_000_000,  // 1 Million Einträge
+        50,         // 50 Bytes durchschnittliche Schlüsselgröße
+        500)) {     // 500 Bytes durchschnittliche Wertgröße
+    
+    // Daten einfügen...
+}
+
+// Temporäre Datenbank für Tests (kein Singleton)
+try (ChronMapDb<String, String> db = MapDbHelper.createTemporaryDb(
+        String.class,
+        String.class,
+        Serializer.STRING,
+        Serializer.STRING)) {
+    
+    // Wird automatisch beim Schließen gelöscht
+}
+```
+
+**Verwaltungs-Funktionen:**
+
+```java
+// Alle registrierten Instanzen anzeigen
+Set<String> names = MapDbHelper.getRegisteredInstanceNames();
+
+// Prüfen ob eine Instanz existiert
+if (MapDbHelper.existsInstance("meine-db")) {
+    // ...
+}
+
+// Snapshot für alle Instanzen erstellen
+MapDbHelper.snapshotAll();
+
+// Statistiken ausgeben
+System.out.println(MapDbHelper.getStatistics());
+
+// Alle Instanzen schließen (z.B. beim Herunterfahren)
+MapDbHelper.closeAll();
+```
+
+### Einfache Verwendung mit Builder (neu ab Version 1.1.0)
+
+Alternativ können Sie auch direkt den Builder verwenden:
 
 ```java
 import com.cherzog.chronmapdb.ChronMapDb;
@@ -187,6 +261,25 @@ assert db1 == db2;
 **Hinweis:** Wenn Sie keinen Namen angeben, wird bei jedem `build()`-Aufruf eine neue Instanz erstellt.
 
 ## API-Dokumentation
+
+### MapDbHelper-Methoden (Utility-Klasse)
+
+**Erstellungs-Methoden:**
+
+- `createSimpleStringDb(String name)` - Erstellt eine einfache String-zu-String Datenbank mit Standardeinstellungen
+- `createSimpleDb(String name, Class<K>, Class<V>, Serializer<K>, Serializer<V>)` - Erstellt eine typisierte Datenbank
+- `createLargeDb(...)` - Erstellt eine optimierte Datenbank für große Datenmengen (100k+ Einträge, 60s Snapshot-Intervall)
+- `createFastSnapshotDb(...)` - Erstellt eine Datenbank mit schnellen Snapshots (5s Intervall für kritische Daten)
+- `createTemporaryDb(...)` - Erstellt eine temporäre Datenbank ohne Singleton-Verhalten
+
+**Verwaltungs-Methoden:**
+
+- `getRegisteredInstanceNames()` - Gibt alle registrierten Instanz-Namen zurück
+- `existsInstance(String name)` - Prüft ob eine benannte Instanz existiert
+- `snapshotAll()` - Erzwingt Snapshots für alle registrierten Instanzen
+- `closeAll()` - Schließt alle registrierten Instanzen
+- `getTotalEntryCount()` - Gibt die Gesamtanzahl aller Einträge über alle Instanzen zurück
+- `getStatistics()` - Gibt formatierte Statistiken über alle Instanzen zurück
 
 ### ChronMapDb-Methoden
 

@@ -42,6 +42,7 @@ bin/
 *.dat
 *.cmap
 *.db
+*.db.wal.*
 *.p
 *.t
 
