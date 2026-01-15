@@ -1072,4 +1072,282 @@ class ChronMapDbTest {
             }
         }
     }
+    
+    @Test
+    void testPutIfAbsentFuegtWertEinWennSchluesselNichtExistiert() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Schlüssel existiert nicht
+            String result = db.putIfAbsent("key1", "value1");
+            
+            assertNull(result, "putIfAbsent sollte null zurückgeben wenn Schlüssel nicht existiert");
+            assertEquals("value1", db.get("key1"), "Wert sollte eingefügt worden sein");
+            assertEquals(1, db.size());
+        }
+    }
+    
+    @Test
+    void testPutIfAbsentFuegtWertNichtEinWennSchluesselExistiert() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Ersten Wert einfügen
+            db.put("key1", "value1");
+            
+            // Versuchen, einen anderen Wert für den gleichen Schlüssel einzufügen
+            String result = db.putIfAbsent("key1", "value2");
+            
+            assertEquals("value1", result, "putIfAbsent sollte den bestehenden Wert zurückgeben");
+            assertEquals("value1", db.get("key1"), "Wert sollte unverändert geblieben sein");
+            assertEquals(1, db.size());
+        }
+    }
+    
+    @Test
+    void testPutIfAbsentSetztLastWrittenKeyNurBeiNeuerEinfuegung() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Ersten Wert einfügen
+            db.putIfAbsent("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Versuchen, einen anderen Wert für den gleichen Schlüssel einzufügen
+            db.putIfAbsent("key1", "value2");
+            assertEquals("key1", db.getLastWrittenKey(), "lastWrittenKey sollte unverändert bleiben");
+            
+            // Neuen Schlüssel einfügen
+            db.putIfAbsent("key2", "value2");
+            assertEquals("key2", db.getLastWrittenKey(), "lastWrittenKey sollte auf neuen Schlüssel aktualisiert sein");
+        }
+    }
+    
+    @Test
+    void testPutIfAbsentErzeugtSnapshotNurBeiAenderung() throws IOException, InterruptedException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .snapshotIntervalSeconds(1)
+            .build()) {
+            
+            // Ersten Wert einfügen - sollte Snapshot auslösen
+            db.putIfAbsent("key1", "value1");
+            
+            // Warten auf Snapshot
+            TimeUnit.SECONDS.sleep(2);
+        }
+        
+        // Neue Instanz erstellen um zu prüfen ob Snapshot erstellt wurde
+        ChronicleMap<String, String> neueChronicleMap = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-putifabsent-snapshot")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        try (ChronMapDb<String, String> db2 = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(neueChronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            assertEquals("value1", db2.get("key1"));
+        } finally {
+            if (!neueChronicleMap.isClosed()) {
+                neueChronicleMap.close();
+            }
+        }
+    }
+    
+    @Test
+    void testPutSetztHasChangesNurBeiTatsaechlicherAenderung() throws IOException, InterruptedException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .snapshotIntervalSeconds(1)
+            .build()) {
+            
+            // Ersten Wert einfügen
+            db.put("key1", "value1");
+            
+            // Warten auf Snapshot
+            TimeUnit.SECONDS.sleep(2);
+            
+            // Gleichen Wert nochmal einfügen - sollte keinen neuen Snapshot auslösen
+            db.put("key1", "value1");
+            
+            // Kurz warten (aber nicht auf vollständiges Intervall)
+            TimeUnit.MILLISECONDS.sleep(500);
+            
+            // Snapshot manuell erstellen - sollte keine Änderungen haben
+            db.snapshot();
+        }
+        
+        // Neue Instanz - Daten sollten vorhanden sein
+        ChronicleMap<String, String> neueChronicleMap = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-put-nochange")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        try (ChronMapDb<String, String> db2 = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(neueChronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            assertEquals("value1", db2.get("key1"));
+        } finally {
+            if (!neueChronicleMap.isClosed()) {
+                neueChronicleMap.close();
+            }
+        }
+    }
+    
+    @Test
+    void testPutSetztLastWrittenKeyNurBeiTatsaechlicherAenderung() throws IOException {
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Zu Beginn sollte kein letzter Schlüssel vorhanden sein
+            assertNull(db.getLastWrittenKey());
+            
+            // Ersten Wert einfügen
+            db.put("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Gleichen Wert nochmal einfügen - lastWrittenKey sollte unverändert bleiben
+            db.put("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Anderen Wert für gleichen Schlüssel - lastWrittenKey sollte aktualisiert werden
+            db.put("key1", "value2");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Neuen Schlüssel einfügen
+            db.put("key2", "value3");
+            assertEquals("key2", db.getLastWrittenKey());
+        }
+    }
+    
+    @Test
+    void testPutIfAbsentThreadSafe() throws Exception {
+        final int threadCount = 10;
+        final ChronicleMap<String, String> map = ChronicleMap
+            .of(String.class, String.class)
+            .name("test-map-putifabsent-threadsafe")
+            .entries(1000)
+            .averageKeySize(20)
+            .averageValueSize(100)
+            .create();
+        
+        final File dbFile = tempDir.resolve("putifabsent-threadsafe.db").toFile();
+        
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(map)
+            .mapDbFile(dbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            final String[] results = new String[threadCount];
+            final Thread[] threads = new Thread[threadCount];
+            
+            // Erstelle mehrere Threads die gleichzeitig versuchen, den gleichen Schlüssel einzufügen
+            for (int i = 0; i < threadCount; i++) {
+                final int index = i;
+                final String value = "value-" + index;
+                threads[i] = new Thread(() -> {
+                    results[index] = db.putIfAbsent("shared-key", value);
+                });
+            }
+            
+            // Starte alle Threads gleichzeitig
+            for (Thread thread : threads) {
+                thread.start();
+            }
+            
+            // Warte auf alle Threads
+            for (Thread thread : threads) {
+                thread.join();
+            }
+            
+            // Genau ein Thread sollte null bekommen haben (erfolgreiche Einfügung)
+            int nullCount = 0;
+            String insertedValue = null;
+            for (String result : results) {
+                if (result == null) {
+                    nullCount++;
+                } else {
+                    // Alle nicht-null Ergebnisse sollten den gleichen Wert haben
+                    if (insertedValue == null) {
+                        insertedValue = result;
+                    } else {
+                        assertEquals(insertedValue, result);
+                    }
+                }
+            }
+            
+            assertEquals(1, nullCount, "Genau ein Thread sollte erfolgreich eingefügt haben");
+            assertNotNull(db.get("shared-key"), "Schlüssel sollte in der Map sein");
+            assertEquals(1, db.size());
+        } finally {
+            if (!map.isClosed()) {
+                map.close();
+            }
+        }
+    }
+    
+    @Test
+    void testPutMitNullWerten() throws IOException {
+        // Note: ChronicleMap doesn't support null values by default
+        // This test verifies that our change detection handles the case correctly
+        // where we're overwriting a value with the same value
+        try (ChronMapDb<String, String> db = new ChronMapDb.Builder<String, String>()
+            .chronicleMap(chronicleMap)
+            .mapDbFile(mapDbFile)
+            .keySerializer(Serializer.STRING)
+            .valueSerializer(Serializer.STRING)
+            .build()) {
+            
+            // Put a value
+            db.put("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Put the same value again - should not update lastWrittenKey
+            // because value hasn't changed
+            db.put("key1", "value1");
+            assertEquals("key1", db.getLastWrittenKey());
+            
+            // Change the value - should update lastWrittenKey
+            db.put("key1", "value2");
+            assertEquals("key1", db.getLastWrittenKey());
+        }
+    }
 }

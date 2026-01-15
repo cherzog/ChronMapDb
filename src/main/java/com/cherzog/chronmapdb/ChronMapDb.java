@@ -8,6 +8,8 @@ import org.mapdb.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Objects;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -149,8 +151,34 @@ public class ChronMapDb<K, V> implements AutoCloseable {
      */
     public V put(K key, V value) {
         V result = chronicleMap.put(key, value);
-        this.lastWrittenKey = key;
-        hasChanges.set(true);
+        // Nur als geändert markieren, wenn tatsächlich ein neuer Wert geschrieben wurde
+        // oder ein bestehender Wert überschrieben wurde
+        boolean valueChanged = !Objects.equals(result, value);
+        if (valueChanged) {
+            this.lastWrittenKey = key;
+            hasChanges.set(true);
+        }
+        return result;
+    }
+    
+    /**
+     * Fügt ein Schlüssel-Wert-Paar nur dann in die Map ein, wenn der Schlüssel
+     * noch nicht vorhanden ist.
+     * 
+     * Diese Methode ist atomar und thread-sicher. Wenn der Schlüssel bereits
+     * existiert, wird die Map nicht verändert und der bestehende Wert zurückgegeben.
+     * 
+     * @param key Der Schlüssel
+     * @param value Der Wert
+     * @return Der vorherige Wert wenn der Schlüssel bereits existierte, oder null
+     */
+    public V putIfAbsent(K key, V value) {
+        V result = chronicleMap.putIfAbsent(key, value);
+        // Nur als geändert markieren, wenn tatsächlich ein Wert eingefügt wurde
+        if (result == null) {
+            this.lastWrittenKey = key;
+            hasChanges.set(true);
+        }
         return result;
     }
     
