@@ -8,6 +8,8 @@ import org.mapdb.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Objects;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -151,7 +153,7 @@ public class ChronMapDb<K, V> implements AutoCloseable {
         V result = chronicleMap.put(key, value);
         // Nur als geändert markieren, wenn tatsächlich ein neuer Wert geschrieben wurde
         // oder ein bestehender Wert überschrieben wurde
-        boolean valueChanged = (result == null) || !result.equals(value);
+        boolean valueChanged = !Objects.equals(result, value);
         if (valueChanged) {
             this.lastWrittenKey = key;
             hasChanges.set(true);
