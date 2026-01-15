@@ -251,11 +251,12 @@ public final class MapDbHelper {
             throw new IllegalArgumentException("Serializer dürfen nicht null sein");
         }
         
-        // Erstelle temporäre Datei - verwende temporäres Verzeichnis
+        // Erstelle temporäre Datei in System-Temp-Verzeichnis
+        // MapDB erstellt die Datei beim Öffnen, daher verwenden wir einen eindeutigen Namen
         File tempDir = new File(System.getProperty("java.io.tmpdir"));
-        File tempFile = File.createTempFile("chronmapdb-", ".db", tempDir);
-        // Lösche die temporäre Datei sofort, damit MapDB sie neu anlegen kann
-        tempFile.delete();
+        String fileName = "chronmapdb-" + System.currentTimeMillis() + "-" + 
+                         System.nanoTime() + ".db";
+        File tempFile = new File(tempDir, fileName);
         tempFile.deleteOnExit();
         
         logger.info("Erstelle temporäre Datenbank in {}", tempFile.getAbsolutePath());
